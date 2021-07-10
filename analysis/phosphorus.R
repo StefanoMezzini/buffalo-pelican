@@ -34,7 +34,7 @@ ggplot() +
   geom_point(aes(year, tp, size = weight), d, alpha = 0.5, na.rm = TRUE) +
   geom_ribbon(aes(year, ymin = lwr, ymax = upr), pred, alpha = 0.25) +
   geom_line(aes(year, mu), pred) +
-  labs(x = 'Year C.E.', y = expression(Fraction~of~italic(Daphnia~spp.))) +
+  labs(x = 'Year C.E.', y = 'Total phosphorus (mg P/g)') +
   scale_size('Weight', range = range(d$weight), breaks = c(0.5, 1:3)) +
   theme(legend.position = 'top')
 
