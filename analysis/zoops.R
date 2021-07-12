@@ -1,9 +1,8 @@
 library('readr')   # for importing data
 library('dplyr')   # for data wrangling funtions; e.g. mutate(), select(), %>%
 library('tidyr')   # for data wrangling funcrions; e.g. expand_grid(), pivot_*
-library('ggplot2') # for plotting
 library('mgcv')    # for modeling
-theme_set(theme_bw())
+source('analysis/figure-theme.R') # ggplot theme and useful constants 
 
 d <- read_csv('data/full-dataset.csv',
               col_types = cols(.default = 'd', lake = 'f')) %>%
@@ -28,7 +27,7 @@ logit.inv <- function(x) {
 
 pred <-
   expand_grid(lake = levels(d$lake), year = seq(1800, 2020)) %>%
-  filter((lake == 'Buffalo Pound' & year < 2010) | lake == 'Pelican') %>%
+  filter((lake == 'Buffalo~Pound' & year < 2010) | lake == 'Pelican') %>%
   mutate(predict(m.zoops, tibble(lake = lake, year = year), se.fit = TRUE) %>%
            bind_cols(),
          mu = logit.inv(fit),
@@ -36,13 +35,14 @@ pred <-
          upr = logit.inv(fit + 1.96 * se.fit))
 
 ggplot() +
-  facet_grid(lake ~ .) +
-  geom_point(aes(year, zoop.ratio, size = weight), d, alpha = 0.5, na.rm=TRUE) +
+  facet_grid(lake ~ ., labeller = label_parsed) +
+  geom_point(aes(year, zoop.ratio, alpha = weight), d, na.rm=TRUE) +
   geom_ribbon(aes(year, ymin = lwr, ymax = upr), pred, alpha = 0.25) +
   geom_line(aes(year, mu), pred) +
   coord_cartesian(ylim = c(0, 0.3)) +
-  scale_size('Weight', range = range(d$weight), breaks = c(0.5, 1:3)) +
+  scale_x_continuous(breaks = BREAKS, labels = BREAK.LABELS) +
+  scale_alpha_continuous('Weight', range = c(0.2, 1), breaks = c(0.5, 1:3)) +
   labs(x = 'Year C.E.', y = expression(Fraction~of~italic(Daphnia~spp.))) +
   theme(legend.position = 'top')
 
-ggsave('figures/zoop-ratio.png', width = 3.23, height = 2, dpi = 300, scale = 2)
+ggsave('figures/zoop-ratio.png', width = W1, height = 2.5, dpi = 300, scale = 2)

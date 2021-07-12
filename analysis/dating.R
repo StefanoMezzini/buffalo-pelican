@@ -2,12 +2,15 @@ library('readxl')  # for importing Excel files
 library('dplyr')   # for data wrangling
 library('tidyr')   # for data wrangling
 library('scam')    # for shape-constrained (i.e. monotonic) additive models
-library('ggplot2') # for plotting
 library('readr')   # for importing files
-theme_set(theme_bw())
+source('analysis/figure-theme.R')
+
+# dating CI extends further
+BREAKS <- seq(1800, 2020, by = 10)
+BREAK.LABELS <- if_else(BREAKS %% 50 == 0, as.character(BREAKS), '')
 
 read.data <- function(path) {
-  l <- case_when(grepl('bp', path) ~ 'Buffalo Pound',
+  l <- case_when(grepl('bp', path) ~ 'Buffalo~Pound',
                  grepl('pelican', path) ~ 'Pelican')
   
   read_xls(path, sheet = 'age calculation CRS B', range = 'A11:AC29') %>%
@@ -46,15 +49,15 @@ new.ages <- bind_cols(new.ages,
   filter(fit > 1800)
 
 ggplot() +
-  facet_grid(lake ~ .) +
+  facet_grid(lake ~ ., labeller = label_parsed) +
   geom_errorbarh(aes(xmin = lwr.1se, xmax = upr.1se, y = mid.depth), dates,
                  color = 'red') +
   geom_point(aes(year, y = mid.depth), dates, color = 'red') +
   geom_ribbon(aes(xmin = lwr, xmax = upr, y = mid.depth), new.ages, alpha=0.3) +
   geom_line(aes(x = fit, y = mid.depth), new.ages) +
   scale_y_reverse('Mid depth (cm)') +
-  #xlab('Year C.E.')
-  labs( x= 'Year C.E.', title = 'scam, mpd')
+  scale_x_continuous(breaks = BREAKS, labels = BREAK.LABELS) +
+  labs(x = 'Year C.E.', title = 'scam, mpd +/- 1 SE')
 
 # add all data into a single spreadsheet with new dates ########################
 # zoops
@@ -70,7 +73,7 @@ full <-
               mutate(bosmina = bosmina / wet.weight.processed.g,
                      daphnia = daphnia / wet.weight.processed.g,
                      zoop.ratio = daphnia / (daphnia + bosmina),
-                     lake = 'Buffalo Pound'),
+                     lake = 'Buffalo~Pound'),
             read_xlsx('data/core-data-pelican/Pelican Lake Cladocera data.xlsx',
                       sheet = 'inidividuals per gram+depth') %>%
               rename(mid.depth = mid) %>%
@@ -92,9 +95,9 @@ full <-
         full_join(
           read_xls('data/core-data-bp/Buffalo Pound Pigment results.xls') %>%
             slice(-1) %>% # remove first row (empty)
-            rename(lake = `Lake/Stream`,
-                   mid.depth = `Sample / Depth`) %>%
-            select(-`Replicate #`, -Date, -DOY),
+            rename(mid.depth = `Sample / Depth`) %>%
+            select(-`Replicate #`, -Date, -DOY, -`Lake/Stream`) %>%
+            mutate(lake = 'Buffalo~Pound'),
           by = c('mid.depth')),
       # sediments in nmol pigment/g sediment
       read_xlsx(
@@ -103,7 +106,7 @@ full <-
                Sed_A, Sed_B, Sed_C, Aphan, Diadino, Myxo, Allo, Diato, Lutein,
                Cantha, Chl_b, Chl_a, Chl_ap, Echine, Phaeo_B, Pheo_A,`B-car`)%>%
         filter(!is.na(Depth)) %>%
-        rename(mid.depth = Depth) %>%
+        rename(mid.depth = Depth, Lut_Zea = Lutein) %>%
         mutate(lake = 'Pelican')) %>%
       mutate(core = 'isotopes'),
     by = c('mid.depth', 'lake', 'core')) %>%
@@ -113,7 +116,7 @@ full <-
                         range = 'D3:E29') %>%
                 transmute(mid.depth = `Depth (cm)`,
                           tp = `mg P/g`,
-                          lake = 'Buffalo Pound'),
+                          lake = 'Buffalo~Pound'),
               read_xlsx('data/core-data-pelican/Pelican Lake TP results.xlsx',
                         range = 'D3:E24') %>%
                 transmute(mid.depth = `Depth (cm)`,
@@ -126,12 +129,15 @@ full <-
          lake = factor(lake)) %>%
   filter(year > 1800) %>%
   # values from slices w more years have more info => larger weight
-  mutate(diff = lag(year) - year,
+  mutate(`%N` = `%N` / 100,
+         `%C` = `%C` / 100,
+         diff = lag(year) - year,
          weight = if_else(lag(lake) == lake & lag(core) == core,
                           true = diff,
                           false = NA_real_,
                           missing = NA_real_)) %>%
-  rename(c.n.ratio = `C/N`, b.car = `B-car`, Pheo_B = Phaeo_B)
+  rename(c.n.ratio = `C/N`, b.car = `B-car`, Pheo_B = Phaeo_B, pn = `%N`,
+         pc = `%C`)
 
 # standardize weights
 full <-
@@ -145,7 +151,7 @@ full <-
 
 # estimates are ok
 ggplot(full) +
-  facet_grid(core ~ lake) +
+  facet_grid(core ~ lake, labeller = label_parsed) +
   geom_point(aes(year, weight,
                  col = lake == lag(lake) & core == lag(core) &
                    year != year[1])) +
